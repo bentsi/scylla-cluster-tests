@@ -322,6 +322,7 @@ class BaseNode(object):
         self.is_enterprise = None
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
         self._set_prometheus_paths()
+        self.cql_port = 9042
 
     def is_docker(self):
         return self.__class__.__name__ == 'DockerNode'
@@ -812,7 +813,7 @@ WantedBy=multi-user.target
             return False
 
     def db_up(self):
-        return self.is_port_used(port=9042, service_name="scylla-server")
+        return self.is_port_used(port=self.cql_port, service_name="scylla-server")
 
     def jmx_up(self):
         return self.is_port_used(port=7199, service_name="scylla-jmx")
