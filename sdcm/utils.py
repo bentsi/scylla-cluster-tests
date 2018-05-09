@@ -17,6 +17,8 @@ import os
 import glob
 import time
 import datetime
+import random
+import string
 from functools import wraps
 
 from avocado.utils import process
@@ -148,3 +150,19 @@ def log_run_info(arg):
         return _inner(arg, arg.__name__)
     else:
         return lambda f: _inner(f, arg)
+
+
+def get_random_string(length=6, alphanum=False):
+    """
+    Generates random string. By default generates string using letters only (lowercase and uppercase).
+    If alphanum=True, will generate string with letters and digits.
+    :param length: string length
+    :param alphanum: with digits
+    :return:
+    """
+    random_string = random.sample(string.ascii_letters, length)
+    if alphanum:
+        random_digits = random.sample(string.digits, length)
+        random_string = random_digits + random_string
+        random.shuffle(random_string)
+    return "".join(random_string[:length])
