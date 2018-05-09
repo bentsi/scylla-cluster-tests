@@ -1347,6 +1347,16 @@ class BaseCluster(object):
         self.nodes.remove(node)
         node.destroy()
 
+    def get_random_node(self, exclude_seed=True):
+        """Return a random node. If non_seed is true don't pick from nodes that are seed"""
+        if exclude_seed:
+            nodes = [node for node in self.nodes if not node.is_seed]
+        else:
+            nodes = self.nodes
+        assert len(nodes) > 0, "Unable randomly select a node, since list of nodes is empty " \
+                               "(Probably only one node in cluster)"
+        return random.choice(nodes)
+
 
 def wait_for_init_wrap(method):
     """
