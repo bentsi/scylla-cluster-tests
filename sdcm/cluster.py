@@ -818,6 +818,17 @@ WantedBy=multi-user.target
     def jmx_up(self):
         return self.is_port_used(port=7199, service_name="scylla-jmx")
 
+    def is_service_up(self, service_name):
+        if self.init_system == "systemd":
+            result = self.remoter.run(cmd="systemctl status %s" % service_name, ignore_status=True)
+
+        elif self.init_system == "sysvinit":
+            result = self.remoter.run(cmd="service %s status" % service_name, ignore_status=True)
+        else:
+            result = 1
+            self.log.error("Unknown init system")
+        return result.exit_status == 0
+
     def cs_installed(self, cassandra_stress_bin=None):
         if cassandra_stress_bin is None:
             cassandra_stress_bin = '/usr/bin/cassandra-stress'
