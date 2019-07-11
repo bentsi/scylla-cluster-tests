@@ -33,6 +33,7 @@ from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
 from keystore import KeyStore
+from sdcm.rsyslog_daemon import stop_rsyslog
 from . import cluster
 from . import nemesis
 from .cluster_libvirt import LoaderSetLibvirt
@@ -1328,6 +1329,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
             stop_events_device()
             self.collect_events_log()
             self.zip_and_upload_job_log()
+            stop_rsyslog()
 
     def zip_and_upload_job_log(self):
         job_log_dir = os.path.dirname(self.logdir)

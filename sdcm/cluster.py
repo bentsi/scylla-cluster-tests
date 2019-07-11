@@ -37,6 +37,8 @@ from sdcm.mgmt import ScyllaManagerError
 from sdcm.prometheus import start_metrics_server
 from textwrap import dedent
 from datetime import datetime
+
+from sdcm.rsyslog_daemon import start_rsyslog
 from .log import SDCMAdapter
 from .remote import RemoteCmdRunner, LocalCmdRunner
 from . import wait
@@ -639,9 +641,15 @@ class BaseNode(object):
             read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
     def start_journal_thread(self):
-        self._journal_thread = threading.Thread(target=self.journal_thread)
-        self._journal_thread.daemon = True
-        self._journal_thread.start()
+        logs_transport = self.parent_cluster.params.get("logs_transport")
+        if logs_transport == "rsyslog":
+            self.log.info("Using rsyslog as log transport")
+        elif logs_transport == "ssh":
+            self._journal_thread = threading.Thread(target=self.journal_thread)
+            self._journal_thread.daemon = True
+            self._journal_thread.start()
+        else:
+            raise Exception("Unknown logs transport: %s" % logs_transport)
 
     def _get_coredump_backtraces(self, last=True):
         """
