@@ -360,18 +360,6 @@ class GCECluster(cluster.BaseCluster):
         self.log.info('added nodes: %s', nodes)
         return nodes
 
-    def node_setup(self, node, verbose=False, timeout=3600):
-        """
-        setup each node in the cluster
-        """
-        # AWS node has these public methods, GCE doesn't
-        # node.wait_ssh_up(verbose=verbose)
-        # node.wait_db_up(verbose=verbose)
-        # TODO: somehow wait for node to start
-
-        if cluster.Setup.REUSE_CLUSTER:
-            return
-
 
 class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
 
@@ -425,6 +413,14 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
                             n_nodes=n_nodes,
                             add_disks=add_disks,
                             params=params)
+
+    def node_setup(self, node, verbose=False, timeout=3600):
+        """
+        setup each node in the cluster if REUSE_CLUSTER is true
+        the method defined in BaseScyllaCluster will skip provisioning the
+        nodes.
+        """
+        super().node_setup()
 
 
 class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
