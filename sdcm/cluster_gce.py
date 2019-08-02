@@ -2,6 +2,7 @@ import os
 import time
 
 import cluster
+from sdcm.utils.common import list_instances_gce
 
 from libcloud.common.google import ResourceNotFoundError
 
@@ -291,15 +292,17 @@ class GCECluster(cluster.BaseCluster):
             instances.append(self._create_instance(node_index, dc_idx))
         return instances
 
-    def _get_instances_by_prefix(self, dc_idx=0):
-        instances_by_zone = self._gce_services[dc_idx].list_nodes(ex_zone=self._gce_region_names[dc_idx])
-        return [node for node in instances_by_zone if node.name.startswith(self._node_prefix)]
-
     def _get_instances(self):
-        instances = self._get_instances_by_prefix()
-        ips = self._node_public_ips or self._node_private_ips
-        attr_name = 'public_ips' if self._node_public_ips else 'private_ips'
-        return [node for node in instances if getattr(node, attr_name)[0] in ips]
+        """
+        list all instances in gce
+        """
+        test_id = cluster.Setup.test_id()
+        if not test_id:
+            raise ValueError(
+                    "test_id should be configured for using reuse_cluster")
+
+        instances = list_instances_gce({"TestId": test_id})
+        return instances
 
     def _create_node(self, instance, node_index, dc_idx):
         try:
