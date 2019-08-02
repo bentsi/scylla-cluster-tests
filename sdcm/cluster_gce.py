@@ -26,7 +26,7 @@ class GCENode(cluster.BaseNode):
 
     def __init__(self, gce_instance, gce_service, credentials, parent_cluster,
                  node_prefix='node', node_index=1, gce_image_username='root',
-                 base_logdir=None, dc_idx=0):
+                 base_logdir=None, dc_idx=0, node_type=None):
         name = '%s-%s-%s' % (node_prefix, dc_idx, node_index)
         self._instance = gce_instance
         self._gce_service = gce_service
@@ -45,13 +45,28 @@ class GCENode(cluster.BaseNode):
                                       node_prefix=node_prefix,
                                       dc_idx=dc_idx)
 
+        node_tags = gce_create_metadata()
+
         if cluster.TEST_DURATION >= 24 * 60 or cluster.Setup.KEEP_ALIVE:
             self.log.info('Test duration set to %s. '
                           'Keep cluster on failure %s. '
                           'Tagging node with "keep-alive"',
                           cluster.TEST_DURATION, cluster.Setup.KEEP_ALIVE)
+
             self._instance_wait_safe(self._gce_service.ex_set_node_tags,
                                      self._instance, ['keep-alive'])
+            # this is inconsistent, keep alive is a tag, all other attributes
+            # are metadata
+            # suggestion: replace this with
+            # node_tags.append({"keep": "alive"})
+
+        if not cluster.Setup.REUSE_CLUSTER:
+            node_tags.append({'name': name})
+            node_tags.append({'node-index': str(node_index)})
+            if node_type:
+                node_tags.append({'node-type': node_type})
+            self._instance_wait_safe(self._gce_service.ex_set_node_tags,
+                                     self._instance, node_tags)
 
     def _instance_wait_safe(self, instance_method, *args, **kwargs):
         """
