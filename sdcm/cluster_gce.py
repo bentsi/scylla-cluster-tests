@@ -3,6 +3,7 @@ import time
 
 import cluster
 from sdcm.utils.common import list_instances_gce
+from sdcm import wait
 
 from libcloud.common.google import ResourceNotFoundError
 
