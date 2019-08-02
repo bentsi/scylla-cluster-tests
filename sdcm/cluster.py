@@ -559,8 +559,13 @@ class BaseNode(object):
     def is_debian(self):
         return self.distro == Distro.DEBIAN8 or self.distro == Distro.DEBIAN9
 
-    def pkg_install(self, pkgs, apt_pkgs=None, ubuntu14_pkgs=None, ubuntu16_pkgs=None,
-                    debian8_pkgs=None, debian9_pkgs=None):
+    def pkg_install(self, pkgs,
+                    apt_pkgs=None,
+                    ubuntu14_pkgs=None,
+                    ubuntu16_pkgs=None,
+                    ubuntu18_pkgs=None,
+                    debian8_pkgs=None,
+                    debian9_pkgs=None):
         """
         Support to install packages to multiple distros
 
