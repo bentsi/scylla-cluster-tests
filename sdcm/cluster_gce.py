@@ -68,7 +68,7 @@ class GCENode(cluster.BaseNode):
         while not ok and retries <= max_retries:
             try:
                 return instance_method(*args, **kwargs)
-            except Exception, details:
+            except Exception as details:
                 self.log.error('Call to method %s (retries: %s) failed: %s',
                                instance_method, retries, details)
                 time.sleep(min((2 ** retries) * 2, threshold))
