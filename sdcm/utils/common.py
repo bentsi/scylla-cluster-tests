@@ -613,7 +613,7 @@ def clean_instances_aws(tags_dict):
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
     aws_instances = list_instances_aws(tags_dict=tags_dict, group_as_region=True)
 
-    print aws_instances.keys()
+    print(aws_instances.keys())
     for region, instance_list in aws_instances.items():
         client = boto3.client('ec2', region_name=region)
         for instance in instance_list:
@@ -664,7 +664,7 @@ def list_instances_gce(tags_dict, running=False):
 
     :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
 
-    :return: None
+    :return: List of gce instances
     """
 
     # avoid cyclic dependency issues, since too many things import utils.py

@@ -2194,6 +2194,12 @@ class BaseCluster(object):
                 self.log.warning("Unable to get coredump status from node {node}: {ex}".format(**locals()))
 
     def node_setup(self, node, verbose=False, timeout=3600):
+        """
+        While NotImplementedError are OK for base classes, a large caveat withthem
+        is that errors will only be caught at run time.
+        Using absract base classes, will catch an error already at start up time.
+        Currently, the code of gce cluster is partially correct because of this.
+        """
         raise NotImplementedError("Derived class must implement 'node_setup' method!")
 
     def get_node_ips_param(public_ip=True):
@@ -3757,7 +3763,7 @@ class BaseMonitorSet(object):
                 self.log.debug('Snapshot local path: {}'.format(snapshot_archive))
 
                 return S3Storage().upload_file(snapshot_archive, dest_dir=Setup.test_id())
-            except Exception, details:
+            except Exception as details:
                 self.log.error('Error downloading prometheus data dir: %s',
                                str(details))
                 return ""
@@ -3771,7 +3777,7 @@ class BaseMonitorSet(object):
                 shutil.make_archive(scylla_manager_local_log_path, 'zip', scylla_mgmt_log_path)
                 link = S3Storage().upload_file("{}.zip".format(scylla_manager_local_log_path), dest_dir=Setup.test_id())
                 self.log.info("Scylla manager log uploaded {}".format(link))
-            except Exception, details:
+            except Exception as details:
                 self.log.error('Error downloading scylla manager log : %s',
                                str(details))
 

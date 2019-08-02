@@ -311,6 +311,10 @@ class GCECluster(cluster.BaseCluster):
     def _get_instances(self):
         """
         list all instances in gce
+
+        internally list_instances_gce already converts instance metadata
+        to a dictionary, and then it checks if {"TestId": "test_id"} is in
+        this metadata.
         """
         test_id = cluster.Setup.test_id()
         if not test_id:
