@@ -16,7 +16,7 @@ nemesis_class_name: 'LimitedChaosMonkey'
 nemesis_interval: 30
 nemesis_during_prepare: 'false'
 
-user_prefix: 'longevity-200gb-48h-verify-limited-tls'
+user_prefix: '3-0-longevity-200gb-48h-verify-limited-tls'
 
 failure_post_behavior: keep
 space_node_threshold: 644245094
@@ -28,3 +28,5 @@ authenticator: 'PasswordAuthenticator'
 authenticator_user: cassandra
 authenticator_password: cassandra
 authorizer: 'CassandraAuthorizer'
+
+append_scylla_args: '--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --enable-sstables-mc-format true'
