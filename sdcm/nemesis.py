@@ -28,6 +28,7 @@ import os
 import re
 import traceback
 from collections import OrderedDict
+from itertools import cycle
 
 from cassandra import InvalidRequest
 
@@ -1732,6 +1733,32 @@ class GeminiChaosMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
+
+
+class ReproduceMalformedSSTableMonkey(Nemesis):
+
+    def __init__(self, *args, **kwargs):
+        super(ReproduceMalformedSSTableMonkey, self).__init__(*args, **kwargs)
+        self.disrupt_methods_list = cycle([
+            self.disrupt_major_compaction,
+            self.disrupt_soft_reboot_node,
+            self.disrupt_major_compaction,
+            self.disrupt_truncate,
+            self.disrupt_stop_start_scylla_server,
+            self.disrupt_nodetool_enospc,
+            self.disrupt_nodetool_decommission,
+            self.disrupt_show_toppartitions,
+            self.disrupt_nodetool_decommission,
+            self.disrupt_stop_wait_start_scylla_server,
+            self.disrupt_nodetool_cleanup,
+            self.disrupt_nodetool_decommission,
+            self.disrupt_show_toppartitions,
+            self.disrupt_nodetool_decommission,
+        ])
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        next(self.disrupt_methods_list)()
 
 
 RELATIVE_NEMESIS_SUBCLASS_LIST = [NotSpotNemesis]
