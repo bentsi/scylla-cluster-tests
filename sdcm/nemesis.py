@@ -28,6 +28,7 @@ import os
 import re
 import traceback
 from collections import OrderedDict
+from itertools import cycle
 
 from cassandra import InvalidRequest
 
@@ -1749,6 +1750,22 @@ class GeminiNonDisruptiveChaosMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
+
+
+class ReproduceMalformedSSTableMonkey2(Nemesis):
+
+    def __init__(self, *args, **kwargs):
+        super(ReproduceMalformedSSTableMonkey2, self).__init__(*args, **kwargs)
+        self.disrupt_methods_list = cycle([
+            self.disrupt_hard_reboot_node,
+            self.disrupt_nodetool_cleanup,
+        ])
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        next(self.disrupt_methods_list)()
+        time.sleep(300)
+        next(self.disrupt_methods_list)()
 
 
 RELATIVE_NEMESIS_SUBCLASS_LIST = [NotSpotNemesis]
