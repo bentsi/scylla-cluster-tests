@@ -2011,7 +2011,7 @@ server_encryption_options:
             options += '-u {} -pw {} '.format(*credentials)
         return "nodetool {options} {sub_cmd} {args}".format(**locals())
 
-    def run_nodetool(self, sub_cmd, args="", options="", ignore_status=False, verbose=True):
+    def run_nodetool(self, sub_cmd, args="", options="", ignore_status=False, verbose=True, timeout=None):
         """
             Wrapper for nodetool command.
             Command format: nodetool [options] command [args]
@@ -2028,7 +2028,7 @@ server_encryption_options:
         :return: Remoter result object
         """
         cmd = self._gen_nodetool_cmd(sub_cmd, args, options)
-        result = self.remoter.run(cmd, ignore_status=ignore_status, verbose=verbose)
+        result = self.remoter.run(cmd, ignore_status=ignore_status, verbose=verbose, timeout=timeout)
         self.log.debug("Command '%s' duration -> %s s" % (result.command, result.duration))
 
         return result
@@ -2819,7 +2819,9 @@ class BaseScyllaCluster(object):
             node.remoter.run('sudo systemctl stop apt-daily.timer', ignore_status=True)
             node.remoter.run('sudo systemctl stop apt-daily-upgrade.timer', ignore_status=True)
         endpoint_snitch = self.params.get('endpoint_snitch')
-        seed_address = self.get_seed_nodes_by_flag()
+        # seed_address = self.get_seed_nodes_by_flag()
+
+        seed_address = self.nodes[0].ip_address
 
         if not Setup.REUSE_CLUSTER:
             node.clean_scylla()

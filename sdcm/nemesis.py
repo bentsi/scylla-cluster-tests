@@ -31,6 +31,8 @@ from itertools import cycle
 from cassandra import InvalidRequest
 from collections import OrderedDict
 
+from invoke import CommandTimedOut
+
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, Setup
 from sdcm.mgmt import TaskStatus
@@ -384,7 +386,7 @@ class Nemesis(object):
         self.cluster.terminate_node(node)
         self.monitoring_set.reconfigure_scylla_monitoring()
 
-    def disrupt_nodetool_decommission(self, add_node=True):
+    def disrupt_nodetool_decommission(self, add_node=True, timeout=21600):  # timeout = 6 hours
         def get_node_info_list(verification_node):
             try:
                 return self.cluster.get_node_info_list(verification_node)
@@ -393,7 +395,12 @@ class Nemesis(object):
                 return None
         self._set_current_disruption('Decommission %s' % self.target_node)
         target_node_ip = self.target_node.ip_address
-        self.target_node.run_nodetool("decommission")
+        try:
+            self.target_node.run_nodetool("decommission", timeout=timeout)
+        except CommandTimedOut:
+            self.target_node.remoter.run("sudo pkill -9 -f decommission", ignore_status=True)
+            self.cluster.restart_scylla(nodes=[self.target_node])
+            raise Exception("Decommission failed due to timeout")
         verification_node = random.choice(self.cluster.nodes)
         node_info_list = get_node_info_list(verification_node)
         while verification_node == self.target_node or node_info_list is None:
@@ -1580,30 +1587,119 @@ class GeminiChaosMonkey(Nemesis):
         self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
 
 
-class ReproduceMalformedSSTableMonkey(Nemesis):
+class ReproduceMalformedSSTableSameNodesMonkey(Nemesis):
 
     def __init__(self, *args, **kwargs):
-        super(ReproduceMalformedSSTableMonkey, self).__init__(*args, **kwargs)
+        super(ReproduceMalformedSSTableSameNodesMonkey, self).__init__(*args, **kwargs)
         self.disrupt_methods_list = cycle([
-            self.disrupt_major_compaction,
-            self.disrupt_soft_reboot_node,
-            self.disrupt_major_compaction,
-            self.disrupt_truncate,
-            self.disrupt_stop_start_scylla_server,
-            self.disrupt_nodetool_enospc,
-            self.disrupt_nodetool_decommission,
-            self.disrupt_show_toppartitions,
-            self.disrupt_nodetool_decommission,
-            self.disrupt_stop_wait_start_scylla_server,
-            self.disrupt_nodetool_cleanup,
-            self.disrupt_nodetool_decommission,
-            self.disrupt_show_toppartitions,
-            self.disrupt_nodetool_decommission,
+            (self.disrupt_major_compaction, 1, None),
+            (self.disrupt_soft_reboot_node, 3, None),
+            (self.disrupt_major_compaction, 1, None),
+            (self.disrupt_truncate,         1, None),
+            (self.disrupt_stop_start_scylla_server, 3, None),
+            (self.disrupt_nodetool_enospc, 1, None),
+            (self.disrupt_nodetool_decommission, 3, None),
+            (self.disrupt_show_toppartitions, 1, None),
+            (self.disrupt_nodetool_decommission, 1, 300),
+            # (self.disrupt_stop_wait_start_scylla_server, 1, None), # done in nemesis
+            (self.disrupt_nodetool_cleanup, 1, None),
+            (self.disrupt_nodetool_decommission, 1, None),
+            (self.disrupt_show_toppartitions, 2, None),
+            (self.disrupt_nodetool_decommission, 3, None)
         ])
+        self.current_target_node_idx = 1
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        next(self.disrupt_methods_list)()
+        disruption_method, target_node_idx, timeout = next(self.disrupt_methods_list)
+        if timeout:
+            disruption_method(timeout=timeout)
+        else:
+            disruption_method()
+        self.current_target_node_idx = target_node_idx
+
+    def set_target_node(self):
+        self.target_node = self.cluster.nodes[self.current_target_node_idx]
+        self.set_current_running_nemesis(node=self.target_node)
+        self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
+
+
+# class ReproduceMalformedSSTableSameNodesMonkey(Nemesis):
+#
+#     @log_time_elapsed_and_status
+#     def disrupt(self):
+#         # 2019-08-21 15:58:19.886:  type=start name=MajorCompaction node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=None
+#         # 2019-08-21 16:02:35.845:  type=end name=MajorCompaction node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=255
+#         self.target_node = self.cluster.nodes[1]
+#         self.disrupt_major_compaction()
+#
+#         # 2019-08-21 16:35:31.946:  type=start name=SoftRebootNode node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-4 [3.87.221.222 | 172.30.0.132] (seed: False) duration=None
+#         # 2019-08-21 16:38:47.968:  type=end name=SoftRebootNode node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-4 [3.87.221.222 | 172.30.0.132] (seed: False) duration=196
+#         self.target_node = self.cluster.nodes[3]
+#         self.disrupt_soft_reboot_node()
+#
+#         # 2019-08-21 17:11:49.034:  type=start name=MajorCompaction node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=None
+#         # 2019-08-21 17:20:08.806:  type=end name=MajorCompaction node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=499
+#         self.target_node = self.cluster.nodes[1]
+#         self.disrupt_major_compaction()
+#
+#         # 2019-08-21 17:53:11.047:  type=start name=TruncateMonkey node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=None
+#         # 2019-08-21 17:53:50.449:  type=end name=TruncateMonkey node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=39
+#         self.target_node = self.cluster.nodes[1]
+#         self.disrupt_truncate()
+#
+#         # 2019-08-21 18:26:50.903:  type=start name=StopStartService node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-4 [3.87.221.222 | 172.30.0.132] (seed: False) duration=None
+#         # 2019-08-21 18:31:17.831:  type=end name=StopStartService node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-4 [3.87.221.222 | 172.30.0.132] (seed: False) duration=266
+#         self.target_node = self.cluster.nodes[3]
+#         self.disrupt_stop_start_scylla_server()
+#
+#         # 2019-08-21 19:04:18.244:  type=start name=Enospc node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=None
+#         # 2019-08-21 19:07:17.174:  type=end name=Enospc node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=178
+#         self.target_node = self.cluster.nodes[1]
+#         self.disrupt_nodetool_enospc()
+#
+#         # 2019-08-21 19:40:23.013:  type=start name=Decommission node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-4 [3.87.221.222 | 172.30.0.132] (seed: False) duration=None
+#         # 2019-08-21 22:16:15.645:  type=end name=Decommission node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-4 [3.87.221.222 | 172.30.0.132] (seed: False) duration=9352
+#         self.target_node = self.cluster.nodes[3]
+#         self.disrupt_nodetool_decommission()
+#
+#         # 2019-08-21 22:49:22.722:  type=start name=ShowTopPartitions node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=None
+#         # 2019-08-21 22:50:24.185:  type=end name=ShowTopPartitions node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=61
+#         self.target_node = self.cluster.nodes[1]
+#         self.disrupt_show_toppartitions()
+#
+#         # 2019-08-21 23:23:21.087:  type=start name=Decommission node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=None
+#         # simulate failure
+#         self.target_node = self.cluster.nodes[1]
+#         self.disrupt_nodetool_decommission(timeout=300)
+#
+#         # 2019-08-23 00:32:46.424:  type=start name=StopWaitStartService node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=None
+#         # 2019-08-23 00:39:00.303:  type=end name=StopWaitStartService node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=373
+#         self.target_node = self.cluster.nodes[1]
+#         self.disrupt_stop_wait_start_scylla_server()
+#
+#         # 2019-08-23 01:11:57.872:  type=start name=NodetoolCleanupMonkey node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-1 [3.86.82.27 | 172.30.0.189] (seed: True) duration=None
+#         # 2019-08-23 01:23:53.797:  type=start name=NodetoolCleanupMonkey node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=None
+#         # 2019-08-23 01:33:47.585:  type=start name=NodetoolCleanupMonkey node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-3 [3.87.218.182 | 172.30.0.243] (seed: True) duration=None
+#         # 2019-08-23 01:45:15.391:  type=start name=NodetoolCleanupMonkey node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-5 [18.234.207.8 | 172.30.0.106] (seed: False) duration=None
+#         # 2019-08-23 01:56:40.262:  type=end name=NodetoolCleanupMonkey node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=2685
+#         self.target_node = self.cluster.nodes[1]
+#         self.disrupt_nodetool_cleanup()
+#
+#         # 2019-08-23 02:29:40.192:  type=start name=Decommission node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=None
+#         # 2019-08-23 05:38:29.975:  type=end name=Decommission node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-2 [54.89.241.217 | 172.30.0.63] (seed: False) duration=11329
+#         self.target_node = self.cluster.nodes[1]
+#         self.disrupt_nodetool_decommission()
+#
+#         # 2019-08-23 06:11:38.940:  type=start name=ShowTopPartitions node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-5 [18.234.207.8 | 172.30.0.106] (seed: False) duration=None
+#         # 2019-08-23 06:12:32.984:  type=end name=ShowTopPartitions node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-5 [18.234.207.8 | 172.30.0.106] (seed: False) duration=54
+#         self.target_node = self.cluster.nodes[2]
+#         self.disrupt_show_toppartitions()
+#
+#         # 2019-08-23 06:45:49.810:  type=start name=Decommission node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-6 [3.82.204.241 | 172.30.0.210] (seed: False) duration=None
+#         # 2019-08-23 12:40:04.083:  type=end name=Decommission node=Node longevity-200gb-48h-verify-limited--db-node-5b293a44-6 [3.82.204.241 | 172.30.0.210] (seed: False) duration=21254
+#         self.target_node = self.cluster.nodes[3]
+#         self.disrupt_nodetool_decommission()
 
 
 RELATIVE_NEMESIS_SUBCLASS_LIST = [NotSpotNemesis]
