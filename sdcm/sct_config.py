@@ -15,6 +15,7 @@ import anyconfig
 
 from sdcm.utils.common import get_s3_scylla_repos_mapping, get_scylla_ami_versions, get_branched_ami
 from sdcm.utils.version_utils import get_branch_version
+from sdcm.utils.common import download_dir_from_cloud
 
 logging.getLogger("anyconfig").setLevel(logging.ERROR)
 
@@ -998,11 +999,19 @@ class SCTConfiguration(dict):
 
             self['user_prefix'] = "{}-{}".format(user_prefix, version_tag)[:35]
 
-        # 8) update target_upgrade_version automaticlly
+        # 8) update target_upgrade_version automatically
         new_scylla_repo = self.get('new_scylla_repo', None)
         if new_scylla_repo and 'target_upgrade_version' not in self:
             self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
         LOGGER.info(self.dump_config())
+
+        # 9) download rpms for update_db_packages
+        update_db_packages = self.get('update_db_packages', default=None)
+        if update_db_packages:
+            if update_db_packages.startswith('s3://') or update_db_packages.startswith('gs://'):
+                self['update_db_packages'] = download_dir_from_cloud(update_db_packages)
+            elif not os.path.isdir(update_db_packages):
+                raise ValueError("update_db_packages=[{}] is not a directory".format(update_db_packages))
 
     @classmethod
     def get_config_option(cls, name):

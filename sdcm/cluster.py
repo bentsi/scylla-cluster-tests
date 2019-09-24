@@ -2553,7 +2553,7 @@ class BaseScyllaCluster(object):  # pylint: disable=too-many-public-methods
             node.remoter.run('sudo yum update -y --skip-broken')
             # replace the packages
             node.remoter.run('yum list installed | grep scylla')
-            node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/*', ignore_status=False, verbose=True)
+            node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/*.rpm', ignore_status=False, verbose=True)
             node.remoter.run('yum list installed | grep scylla')
             queue.put(node)
             queue.task_done()
