@@ -106,6 +106,13 @@ def configure_logging():
                 'filename': '{}/sct.log'.format(Setup.logdir()),
                 'mode': 'w',
                 'formatter': 'default',
+            },
+            'paramiko_log': {
+                'level': 'DEBUG',
+                '()': MakeFileHandler,
+                'filename': '{}/paramiko.log'.format(Setup.logdir()),
+                'mode': 'w',
+                'formatter': 'default',
             }
         },
         'loggers': {
@@ -123,8 +130,8 @@ def configure_logging():
             's3transfer': {
                 'level': 'CRITICAL'
             },
-            'paramiko.transport': {
-                'level': 'CRITICAL'
+            'paramiko': {
+                'handlers': ['paramiko_log'],
             },
             'cassandra.connection': {
                 'level': 'INFO'
