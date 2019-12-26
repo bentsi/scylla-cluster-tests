@@ -278,6 +278,7 @@ class Setup(object):
         post_boot_script = '#!/bin/bash'
         post_boot_script += dedent(r'''
                sudo sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
+               sudo sed -i 's/#LogLevel INFO/LogLevel DEBUG/' /etc/ssh/sshd_config
                sudo systemctl restart sshd
                ''')
         if cls.RSYSLOG_ADDRESS:
