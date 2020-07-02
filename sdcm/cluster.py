@@ -3404,7 +3404,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                           murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
                           alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'))
 
-    def node_setup(self, node, verbose=False, timeout=3600):
+    def node_setup(self, node, verbose=False, timeout=3600):  # pylint: disable=too-many-branches
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
 
         install_scylla = True
@@ -3437,7 +3437,13 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.remoter.run('sudo cat /etc/scylla.d/io.conf')
 
             if self.params.get('use_mgmt', None):
-                region = self.params.get('region_name').split()
+                cluster_backend = self.params.get("cluster_backend")
+                if cluster_backend == "aws":
+                    region = self.params.get('region_name').split()
+                elif cluster_backend == "gce":
+                    region = self.params.get('gce_datacenter').split()
+                else:
+                    raise Exception(f"Unknown cluster backend: '{cluster_backend}'")
                 pkgs_url = self.params.get('scylla_mgmt_pkg', None)
                 pkg_path = None
                 if pkgs_url:
